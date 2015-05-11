@@ -9,7 +9,6 @@ import Error(errResponse)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.String.Conversions (cs)
-import Data.ByteString.Char8 (unpack)
 import Network.Wai (strictRequestBody)
 import Network.Wai.Middleware.Cors (cors)
 import Network.Wai.Handler.Warp hiding (Connection)
@@ -46,11 +45,7 @@ main = do
   Prelude.putStrLn $ "Listening on port " ++
     (show $ configPort conf :: String)
 
-  let pgSettings = P.ParamSettings (cs $ configDbHost conf)
-                     (fromIntegral $ configDbPort conf)
-                     (cs $ configDbUser conf)
-                     (cs $ configDbPass conf)
-                     (cs $ configDbName conf)
+  let pgSettings = P.StringSettings (cs $ configDbUri conf)
       appSettings = setPort port
                   . setServerName (cs $ "postgrest/" <> prettyVersion)
                   $ defaultSettings
@@ -59,8 +54,6 @@ main = do
         . basicAuth (\u p -> return $ u == (cs basicAuthUser) && p == (cs basicAuthPass)) "Postgrest realm"
         . gzip def . cors corsPolicy
         . staticPolicy (only [("favicon.ico", "static/favicon.ico")])
-      anonRole = cs $ configAnonRole conf
-      currRole = cs $ configDbUser conf
 
   poolSettings <- maybe (fail "Improper session settings") return $
                 H.poolSettings (fromIntegral $ configPool conf) 30
@@ -70,7 +63,7 @@ main = do
   runSettings appSettings $ middle $ \req respond -> do
     body <- strictRequestBody req
     resOrError <- liftIO $ H.session pool $ H.tx Nothing $
-      authenticated currRole anonRole (app (cs $ configV1Schema conf) body) req
+      unauthenticated (app (cs $ configV1Schema conf) body) req
     either (respond . errResponse) respond resOrError
 
   where

@@ -10,14 +10,9 @@ import Options.Applicative hiding (columns)
 import Network.Wai.Middleware.Cors (CorsResourcePolicy(..))
 
 data AppConfig = AppConfig {
-    configDbName :: String
-  , configDbPort :: Int
-  , configDbUser :: String
-  , configDbPass :: String
-  , configDbHost :: String
+    configDbUri :: String
 
   , configPort  :: Int
-  , configAnonRole :: String
   , configSecure :: Bool
   , configPool :: Int
   , configV1Schema :: String
@@ -27,14 +22,9 @@ data AppConfig = AppConfig {
 
 argParser :: Parser AppConfig
 argParser = AppConfig
-  <$> strOption (long "db-name" <> short 'd' <> metavar "NAME" <> help "name of database")
-  <*> option auto (long "db-port" <> short 'P' <> metavar "PORT" <> value 5432 <> help "postgres server port" <> showDefault)
-  <*> strOption (long "db-user" <> short 'U' <> metavar "ROLE" <> help "postgres authenticator role")
-  <*> strOption (long "db-pass" <> metavar "PASS" <> value "" <> help "password for authenticator role")
-  <*> strOption (long "db-host" <> metavar "HOST" <> value "localhost" <> help "postgres server hostname" <> showDefault)
+  <$> strOption (long "db-uri" <> short 'D' <> metavar "URI" <> help "URI of database")
 
   <*> option auto (long "port" <> short 'p' <> metavar "PORT" <> value 3000 <> help "port number on which to run HTTP server" <> showDefault)
-  <*> strOption (long "anonymous" <> short 'a' <> metavar "ROLE" <> help "postgres role to use for non-authenticated requests")
   <*> switch (long "secure" <> short 's' <> help "Redirect all requests to HTTPS")
   <*> option auto (long "db-pool" <> metavar "COUNT" <> value 10 <> help "Max connections in database pool" <> showDefault)
   <*> strOption (long "v1schema" <> metavar "NAME" <> value "1" <> help "Schema to use for nonspecified version (or explicit v1)" <> showDefault)
