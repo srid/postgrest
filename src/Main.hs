@@ -9,6 +9,8 @@ import Error(errResponse)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.String.Conversions (cs)
+import Data.ByteString (ByteString)
+import Data.Maybe (fromJust)
 import Network.Wai (strictRequestBody)
 import Network.Wai.Middleware.Cors (cors)
 import Network.Wai.Handler.Warp hiding (Connection)
@@ -16,13 +18,31 @@ import Network.Wai.Middleware.Gzip (gzip, def)
 import Network.Wai.Middleware.Static (staticPolicy, only)
 import Network.Wai.Middleware.RequestLogger (logStdout)
 import Network.Wai.Middleware.HttpAuth (basicAuth)
+import Network.URI as URI
 import Data.List (intercalate)
+import Data.List.Split (splitOn)
 import Data.Version (versionBranch)
 import qualified Hasql as H
 import qualified Hasql.Postgres as P
 import Options.Applicative hiding (columns)
 
 import Config (AppConfig(..), argParser, corsPolicy)
+
+extractUserPassFromUriAuth :: URI.URIAuth -> Maybe (String, String)
+extractUserPassFromUriAuth auth =
+  case splitOn "@" (URI.uriUserInfo auth) of
+   (x:_) -> case splitOn ":" x of
+             (u:p:_) -> Just (u, p)
+             _ -> Nothing
+   _ -> Nothing
+
+checkCreds :: URI.URI -> ByteString -> ByteString -> Bool
+checkCreds uri user pass =
+  case URI.uriAuthority uri of
+   Nothing -> True
+   Just auth -> case extractUserPassFromUriAuth auth of
+     Nothing -> False
+     Just (u, p) -> u == (cs user) && p == (cs pass)
 
 main :: IO ()
 main = do
@@ -37,21 +57,21 @@ main = do
   conf <- customExecParser parserPrefs opts
   let port = configPort conf
 
-  let basicAuthUser = configBasicAuthUser conf
-  let basicAuthPass = configBasicAuthPassword conf
-
   unless (configSecure conf) $
     putStrLn "WARNING, running in insecure mode, auth will be in plaintext"
   Prelude.putStrLn $ "Listening on port " ++
     (show $ configPort conf :: String)
 
-  let pgSettings = P.StringSettings (cs $ configDbUri conf)
+  let pgUriString = configDbUri conf
+      pgUri = fromJust $ URI.parseURI pgUriString
+      pgSettings = P.StringSettings (cs $ pgUriString)
+      checkCredsIO = (\u p -> return $ (checkCreds pgUri) u p)
       appSettings = setPort port
                   . setServerName (cs $ "postgrest/" <> prettyVersion)
                   $ defaultSettings
       middle = logStdout
         . (if configSecure conf then redirectInsecure else id)
-        . basicAuth (\u p -> return $ u == (cs basicAuthUser) && p == (cs basicAuthPass)) "Postgrest realm"
+        . basicAuth checkCredsIO "Postgrest realm"
         . gzip def . cors corsPolicy
         . staticPolicy (only [("favicon.ico", "static/favicon.ico")])
 
