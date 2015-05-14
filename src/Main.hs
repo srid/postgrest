@@ -15,7 +15,7 @@ import Network.Wai (strictRequestBody)
 import Network.Wai.Middleware.Cors (cors)
 import Network.Wai.Handler.Warp hiding (Connection)
 import Network.Wai.Middleware.Gzip (gzip, def)
-import Network.Wai.Middleware.Static (staticPolicy, only)
+import Network.Wai.Middleware.Static (static)
 import Network.Wai.Middleware.RequestLogger (logStdout)
 import Network.Wai.Middleware.HttpAuth (basicAuth)
 import Network.URI as URI
@@ -73,7 +73,7 @@ main = do
         . (if configSecure conf then redirectInsecure else id)
         . basicAuth checkCredsIO "Postgrest realm"
         . gzip def . cors corsPolicy
-        . staticPolicy (only [("favicon.ico", "static/favicon.ico")])
+        . static
 
   poolSettings <- maybe (fail "Improper session settings") return $
                 H.poolSettings (fromIntegral $ configPool conf) 30
