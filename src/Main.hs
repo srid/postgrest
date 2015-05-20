@@ -6,6 +6,7 @@ import App
 import Middleware
 import Error(errResponse)
 
+import System.Environment (getEnv)
 import Control.Monad (unless)
 import Control.Monad.IO.Class (liftIO)
 import Data.String.Conversions (cs)
@@ -36,13 +37,17 @@ extractUserPassFromUriAuth auth =
              _ -> Nothing
    _ -> Nothing
 
-checkCreds :: URI.URI -> ByteString -> ByteString -> Bool
-checkCreds uri user pass =
+checkCredsPG :: URI.URI -> ByteString -> ByteString -> Bool
+checkCredsPG uri user pass =
   case URI.uriAuthority uri of
    Nothing -> True
    Just auth -> case extractUserPassFromUriAuth auth of
      Nothing -> False
      Just (u, p) -> u == (cs user) && p == (cs pass)
+
+checkCredsEnv :: String -> String -> ByteString -> ByteString -> Bool
+checkCredsEnv username password user pass =
+  username == (cs user) && password == (cs pass)
 
 main :: IO ()
 main = do
@@ -54,6 +59,10 @@ main = do
                     <> " / create a REST API to an existing Postgres database"
                 )
       parserPrefs = prefs showHelpOnError
+
+  username <- getEnv "POSTGREST_USERNAME"
+  password <- getEnv "POSTGREST_PASSWORD"
+
   conf <- customExecParser parserPrefs opts
   let port = configPort conf
 
@@ -63,9 +72,9 @@ main = do
     (show $ configPort conf :: String)
 
   let pgUriString = configDbUri conf
-      pgUri = fromJust $ URI.parseURI pgUriString
+      -- pgUri = fromJust $ URI.parseURI pgUriString
       pgSettings = P.StringSettings (cs $ pgUriString)
-      checkCredsIO = (\u p -> return $ (checkCreds pgUri) u p)
+      checkCredsIO = (\u p -> return $ (checkCredsEnv username password) u p)
       appSettings = setPort port
                   . setServerName (cs $ "postgrest/" <> prettyVersion)
                   $ defaultSettings
